@@ -26,7 +26,8 @@ from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.exceptions import RequestValidationError
 import uvicorn
-
+from google.adk.agents.callback_context import CallbackContext
+from google.adk.models import LlmRequest, LlmResponse
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -57,6 +58,58 @@ class AgentResponse(BaseModel):
     grounding_metadata: Optional[Dict[str, Any]] = None
     usage_metadata: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+async def after_model_callback(
+    callback_context: CallbackContext, llm_response: LlmResponse
+) -> Optional[LlmResponse]:
+    print("##" * 22)
+
+    # Get user input text from callback_context if available
+    user_input = getattr(callback_context, "user_input", None)
+    if user_input is None:
+        user_input = "<No input text available>"
+    print(f"User input text: {user_input}")
+
+    response_dump = llm_response.model_dump()
+
+    # Full raw response print (optional, comment out if verbose)
+    # print(f"LLM Response raw: {response_dump}")
+
+    content = response_dump.get("content")
+    if not content:
+        print("No content in LLM response.")
+        return llm_response
+
+    parts = content.get("parts", [])
+    if not parts:
+        print("No parts in content.")
+        return llm_response
+
+    any_function_call_found = False
+
+    for idx, part in enumerate(parts):
+        function_call = part.get("function_call")
+        function_response = part.get("function_response")
+        text = part.get("text")
+
+        print(f"\nPart #{idx + 1} Text: {text}")
+
+        if function_call:
+            any_function_call_found = True
+            print(f"Function call made: {function_call.get('name', '<no name>')}")
+            print(f"Function call args: {function_call.get('args', {})}")
+        else:
+            print("No function call in this part.")
+
+        if function_response:
+            print(f"Function response: {function_response}")
+        else:
+            print("No function response in this part.")
+
+    if not any_function_call_found:
+        print("\nNo function call found in any part of the response.")
+
+    print("##" * 22)
+    return llm_response
 
 # Create root agent with enhanced configuration
 root_agent = Agent(
@@ -65,6 +118,7 @@ root_agent = Agent(
     description='A bilingual homestay search assistant for Nepal with voice message support.',
     instruction='''You are an intelligent homestay search assistant specialized in helping users find homestays in Nepal. You can understand and respond in both English and Nepali, and work seamlessly with voice messages and text queries.
 
+##IMPORTANT: Always use the natural_language_description parameter when calling search tools AND REGARDLESS OF IN WHICH LANGUAGE USER PROMPTS IN WHILE PASSING NATURAL LANGAUGE TO THE TOOL PASS IN ENGLISH WITH PERFECT TRANSLATION.
 ## Core Capabilities
 
 ### Language Understanding
@@ -112,6 +166,7 @@ Remember: Help users find the perfect homestay by understanding their needs in t
             url="http://localhost:8080/homestay/mcp",
         )
     )],  
+    after_model_callback=after_model_callback,
 )
 
 class SessionManager:
@@ -167,8 +222,6 @@ async def process_agent_response(runner: Runner, content: Content, session_id: s
         
         # Run the agent and collect events
         async for events in runner.run_async(user_id=user_id, session_id=session_id, new_message=content):
-            all_events.append(events)
-            
             if events.is_final_response():
                 final_event = events
                 
