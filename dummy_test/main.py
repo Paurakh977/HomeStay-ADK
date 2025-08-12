@@ -60,7 +60,7 @@ class AgentResponse(BaseModel):
 
 # Create root agent with enhanced configuration
 root_agent = Agent(
-    model='gemini-2.0-flash-exp',
+    model='gemini-2.5-flash',
     name='homestay_search_agent',
     description='A bilingual homestay search assistant for Nepal with voice message support.',
     instruction='''You are an intelligent homestay search assistant specialized in helping users find homestays in Nepal. You can understand and respond in both English and Nepali, and work seamlessly with voice messages and text queries.
