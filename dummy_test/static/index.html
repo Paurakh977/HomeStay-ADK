@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Send Text or Voice</title>
+<style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    button { margin: 5px; }
+    textarea { width: 100%; height: 80px; }
+</style>
+</head>
+<body>
+<h1>Message Sender</h1>
+
+<h3>Text Message</h3>
+<textarea id="textInput" placeholder="Type your message..."></textarea><br>
+<button onclick="sendText()">Send Text</button>
+
+<h3>Voice Message</h3>
+<button id="recordBtn">🎙 Start Recording</button>
+<button id="stopBtn" disabled>⏹ Stop Recording</button>
+<button id="sendAudioBtn" disabled>📤 Send Audio</button>
+
+<p id="status"></p>
+
+<script>
+const userId = 123; // change as needed
+let mediaRecorder;
+let audioChunks = [];
+
+document.getElementById("recordBtn").onclick = async () => {
+    audioChunks = [];
+    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+    mediaRecorder = new MediaRecorder(stream);
+    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
+    mediaRecorder.start();
+    document.getElementById("status").innerText = "Recording...";
+    document.getElementById("recordBtn").disabled = true;
+    document.getElementById("stopBtn").disabled = false;
+};
+
+document.getElementById("stopBtn").onclick = () => {
+    mediaRecorder.stop();
+    mediaRecorder.onstop = () => {
+        document.getElementById("status").innerText = "Recording stopped.";
+        document.getElementById("stopBtn").disabled = true;
+        document.getElementById("sendAudioBtn").disabled = false;
+    };
+};
+
+document.getElementById("sendAudioBtn").onclick = async () => {
+    const blob = new Blob(audioChunks, { type: "audio/webm" });
+    const base64 = await blobToBase64(blob);
+
+    const payload = {
+        mime_type: "audio/webm",
+        data: base64.split(",")[1] // strip data URI prefix
+    };
+
+    const res = await fetch(`/send/${userId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    console.log(json);
+    document.getElementById("status").innerText = "Audio sent!";
+};
+
+function blobToBase64(blob) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onloadend = () => resolve(reader.result);
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+    });
+}
+
+async function sendText() {
+    const text = document.getElementById("textInput").value.trim();
+    if (!text) return alert("Enter text before sending.");
+
+    const payload = {
+        mime_type: "text/plain",
+        data: text
+    };
+
+    const res = await fetch(`/send/${userId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload)
+    });
+    const json = await res.json();
+    console.log(json);
+    document.getElementById("status").innerText = "Text sent!";
+}
+</script>
+</body>
+</html>
