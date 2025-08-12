@@ -1,99 +1,630 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Send Text or Voice</title>
-<style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    button { margin: 5px; }
-    textarea { width: 100%; height: 80px; }
-</style>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google ADK Chat Interface</title>
+    <style>
+        :root {
+            --primary-color: #4285f4;
+            --success-color: #34a853;
+            --error-color: #ea4335;
+            --warning-color: #fbbc04;
+            --bg-color: #f8f9fa;
+            --card-bg: #ffffff;
+            --text-primary: #202124;
+            --text-secondary: #5f6368;
+            --border-color: #dadce0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Google Sans', 'Roboto', Arial, sans-serif;
+            background-color: var(--bg-color);
+            color: var(--text-primary);
+            line-height: 1.6;
+            padding: 20px;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            gap: 20px;
+            grid-template-columns: 1fr;
+        }
+
+        h1 {
+            text-align: center;
+            color: var(--primary-color);
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            font-weight: 400;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: var(--text-secondary);
+            margin-bottom: 30px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            border: 1px solid var(--border-color);
+        }
+
+        .input-section {
+            display: grid;
+            gap: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        label {
+            font-weight: 500;
+            color: var(--text-primary);
+            font-size: 0.875rem;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 16px;
+            border: 2px solid var(--border-color);
+            border-radius: 8px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.2s ease;
+        }
+
+        textarea:focus {
+            outline: none;
+            border-color: var(--primary-color);
+        }
+
+        .button-group {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+            align-items: center;
+        }
+
+        button {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover:not(:disabled) {
+            background-color: #3367d6;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(66, 133, 244, 0.3);
+        }
+
+        .btn-secondary {
+            background-color: var(--text-secondary);
+            color: white;
+        }
+
+        .btn-secondary:hover:not(:disabled) {
+            background-color: #3c4043;
+        }
+
+        .btn-success {
+            background-color: var(--success-color);
+            color: white;
+        }
+
+        .btn-success:hover:not(:disabled) {
+            background-color: #2d7d32;
+        }
+
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none !important;
+        }
+
+        .recording {
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        .status {
+            padding: 16px;
+            border-radius: 8px;
+            margin: 16px 0;
+            font-weight: 500;
+            display: none;
+        }
+
+        .status.success {
+            background-color: #e8f5e8;
+            color: var(--success-color);
+            border-left: 4px solid var(--success-color);
+            display: block;
+        }
+
+        .status.error {
+            background-color: #fce8e6;
+            color: var(--error-color);
+            border-left: 4px solid var(--error-color);
+            display: block;
+        }
+
+        .status.info {
+            background-color: #e3f2fd;
+            color: var(--primary-color);
+            border-left: 4px solid var(--primary-color);
+            display: block;
+        }
+
+        .response-section {
+            margin-top: 20px;
+        }
+
+        .response-card {
+            background: linear-gradient(135deg, #f8f9fa 0%, #e8eaf6 100%);
+            border: 2px solid var(--primary-color);
+            border-radius: 12px;
+            padding: 24px;
+            margin-top: 16px;
+            display: none;
+        }
+
+        .response-card.visible {
+            display: block;
+            animation: slideIn 0.3s ease-out;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .response-text {
+            font-size: 16px;
+            line-height: 1.7;
+            color: var(--text-primary);
+            white-space: pre-wrap;
+            word-wrap: break-word;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            border-left: 4px solid var(--primary-color);
+            margin-bottom: 16px;
+        }
+
+        .response-metadata {
+            display: grid;
+            gap: 12px;
+            font-size: 14px;
+            color: var(--text-secondary);
+        }
+
+        .metadata-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 12px;
+            background: rgba(255, 255, 255, 0.7);
+            border-radius: 6px;
+        }
+
+        .metadata-label {
+            font-weight: 500;
+        }
+
+        .metadata-value {
+            font-family: 'Roboto Mono', monospace;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 2px solid #f3f3f3;
+            border-top: 2px solid var(--primary-color);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .user-id-section {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 20px;
+        }
+
+        .user-id-input {
+            padding: 8px 12px;
+            border: 2px solid var(--border-color);
+            border-radius: 6px;
+            font-size: 14px;
+            width: 120px;
+        }
+
+        .clear-session-btn {
+            background-color: var(--warning-color);
+            color: var(--text-primary);
+            font-size: 12px;
+            padding: 8px 16px;
+        }
+
+        .clear-session-btn:hover {
+            background-color: #f9ab00;
+        }
+
+        @media (max-width: 768px) {
+            .container {
+                padding: 10px;
+            }
+            
+            h1 {
+                font-size: 2rem;
+            }
+            
+            .button-group {
+                flex-direction: column;
+            }
+            
+            button {
+                width: 100%;
+                justify-content: center;
+            }
+        }
+    </style>
 </head>
 <body>
-<h1>Message Sender</h1>
+    <div class="container">
+        <h1>🤖 Google ADK Chat</h1>
+        <p class="subtitle">Powered by Gemini 2.0 Flash with Google Search</p>
 
-<h3>Text Message</h3>
-<textarea id="textInput" placeholder="Type your message..."></textarea><br>
-<button onclick="sendText()">Send Text</button>
+        <div class="card">
+            <div class="user-id-section">
+                <label for="userIdInput">User ID:</label>
+                <input type="number" id="userIdInput" class="user-id-input" value="123" min="1">
+                <button class="clear-session-btn" onclick="clearSession()">🗑️ Clear Session</button>
+            </div>
 
-<h3>Voice Message</h3>
-<button id="recordBtn">🎙 Start Recording</button>
-<button id="stopBtn" disabled>⏹ Stop Recording</button>
-<button id="sendAudioBtn" disabled>📤 Send Audio</button>
+            <div class="input-section">
+                <div class="input-group">
+                    <label for="textInput">📝 Text Message</label>
+                    <textarea id="textInput" placeholder="Ask me anything... I can search the web for current information!"></textarea>
+                    <div class="button-group">
+                        <button class="btn-primary" onclick="sendText()">
+                            <span id="sendTextIcon">📤</span>
+                            <span id="sendTextLabel">Send Text</span>
+                        </button>
+                    </div>
+                </div>
 
-<p id="status"></p>
+                <div class="input-group">
+                    <label>🎙️ Voice Message</label>
+                    <div class="button-group">
+                        <button id="recordBtn" class="btn-secondary">🎙️ Start Recording</button>
+                        <button id="stopBtn" class="btn-secondary" disabled>⏹️ Stop Recording</button>
+                        <button id="sendAudioBtn" class="btn-success" disabled>📤 Send Audio</button>
+                    </div>
+                </div>
+            </div>
+        </div>
 
-<script>
-const userId = 123; // change as needed
-let mediaRecorder;
-let audioChunks = [];
+        <div id="status" class="status"></div>
 
-document.getElementById("recordBtn").onclick = async () => {
-    audioChunks = [];
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    mediaRecorder = new MediaRecorder(stream);
-    mediaRecorder.ondataavailable = e => audioChunks.push(e.data);
-    mediaRecorder.start();
-    document.getElementById("status").innerText = "Recording...";
-    document.getElementById("recordBtn").disabled = true;
-    document.getElementById("stopBtn").disabled = false;
-};
+        <div class="response-section">
+            <div id="responseCard" class="response-card">
+                <h3 style="margin-bottom: 16px; color: var(--primary-color);">🤖 Agent Response</h3>
+                <div id="responseText" class="response-text"></div>
+                <div id="responseMetadata" class="response-metadata"></div>
+            </div>
+        </div>
+    </div>
 
-document.getElementById("stopBtn").onclick = () => {
-    mediaRecorder.stop();
-    mediaRecorder.onstop = () => {
-        document.getElementById("status").innerText = "Recording stopped.";
-        document.getElementById("stopBtn").disabled = true;
-        document.getElementById("sendAudioBtn").disabled = false;
-    };
-};
+    <script>
+        let mediaRecorder;
+        let audioChunks = [];
+        let isRecording = false;
 
-document.getElementById("sendAudioBtn").onclick = async () => {
-    const blob = new Blob(audioChunks, { type: "audio/webm" });
-    const base64 = await blobToBase64(blob);
+        // DOM elements
+        const userIdInput = document.getElementById('userIdInput');
+        const textInput = document.getElementById('textInput');
+        const recordBtn = document.getElementById('recordBtn');
+        const stopBtn = document.getElementById('stopBtn');
+        const sendAudioBtn = document.getElementById('sendAudioBtn');
+        const statusDiv = document.getElementById('status');
+        const responseCard = document.getElementById('responseCard');
+        const responseText = document.getElementById('responseText');
+        const responseMetadata = document.getElementById('responseMetadata');
+        const sendTextIcon = document.getElementById('sendTextIcon');
+        const sendTextLabel = document.getElementById('sendTextLabel');
 
-    const payload = {
-        mime_type: "audio/webm",
-        data: base64.split(",")[1] // strip data URI prefix
-    };
+        // Utility functions
+        function getCurrentUserId() {
+            const userId = parseInt(userIdInput.value);
+            if (isNaN(userId) || userId <= 0) {
+                showStatus('Please enter a valid user ID (positive number)', 'error');
+                return null;
+            }
+            return userId;
+        }
 
-    const res = await fetch(`/send/${userId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    });
-    const json = await res.json();
-    console.log(json);
-    document.getElementById("status").innerText = "Audio sent!";
-};
+        function showStatus(message, type = 'info') {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+            
+            // Auto-hide success messages
+            if (type === 'success') {
+                setTimeout(() => {
+                    statusDiv.style.display = 'none';
+                }, 3000);
+            }
+        }
 
-function blobToBase64(blob) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onloadend = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(blob);
-    });
-}
+        function showLoading(isLoading, buttonElement, iconElement, labelElement) {
+            if (isLoading) {
+                buttonElement.disabled = true;
+                iconElement.innerHTML = '<div class="loading"></div>';
+                labelElement.textContent = 'Processing...';
+            } else {
+                buttonElement.disabled = false;
+                iconElement.textContent = '📤';
+                labelElement.textContent = 'Send Text';
+            }
+        }
 
-async function sendText() {
-    const text = document.getElementById("textInput").value.trim();
-    if (!text) return alert("Enter text before sending.");
+        function displayResponse(response) {
+            if (response.success && response.response_text) {
+                responseText.textContent = response.response_text;
+                
+                // Display metadata
+                const metadata = [];
+                if (response.author) {
+                    metadata.push(`<div class="metadata-item">
+                        <span class="metadata-label">Author:</span>
+                        <span class="metadata-value">${response.author}</span>
+                    </div>`);
+                }
+                
+                if (response.grounding_metadata) {
+                    const gm = response.grounding_metadata;
+                    if (gm.grounding_chunks > 0) {
+                        metadata.push(`<div class="metadata-item">
+                            <span class="metadata-label">Search Results:</span>
+                            <span class="metadata-value">${gm.grounding_chunks} chunks, ${gm.grounding_supports} supports</span>
+                        </div>`);
+                    }
+                }
+                
+                responseMetadata.innerHTML = metadata.join('');
+                responseCard.classList.add('visible');
+                
+                showStatus('Response received successfully!', 'success');
+            } else {
+                showStatus(response.error || 'Unknown error occurred', 'error');
+            }
+        }
 
-    const payload = {
-        mime_type: "text/plain",
-        data: text
-    };
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
+        }
 
-    const res = await fetch(`/send/${userId}`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload)
-    });
-    const json = await res.json();
-    console.log(json);
-    document.getElementById("status").innerText = "Text sent!";
-}
-</script>
+        // Text message functionality
+        async function sendText() {
+            const text = textInput.value.trim();
+            const userId = getCurrentUserId();
+            
+            if (!userId) return;
+            
+            if (!text) {
+                showStatus('Please enter a message before sending', 'error');
+                return;
+            }
+
+            showLoading(true, document.querySelector('.btn-primary'), sendTextIcon, sendTextLabel);
+            responseCard.classList.remove('visible');
+
+            try {
+                const payload = {
+                    mime_type: "text/plain",
+                    data: text
+                };
+
+                const response = await fetch(`/send/${userId}`, {
+                    method: "POST",
+                    headers: { 
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                displayResponse(result);
+                
+                if (result.success) {
+                    textInput.value = ''; // Clear input on success
+                }
+
+            } catch (error) {
+                console.error('Error sending text:', error);
+                showStatus(`Network error: ${error.message}`, 'error');
+            } finally {
+                showLoading(false, document.querySelector('.btn-primary'), sendTextIcon, sendTextLabel);
+            }
+        }
+
+        // Voice recording functionality
+        recordBtn.onclick = async () => {
+            try {
+                audioChunks = [];
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+                
+                mediaRecorder = new MediaRecorder(stream, { 
+                    mimeType: 'audio/webm;codecs=opus' 
+                });
+                
+                mediaRecorder.ondataavailable = e => {
+                    if (e.data.size > 0) {
+                        audioChunks.push(e.data);
+                    }
+                };
+                
+                mediaRecorder.start();
+                isRecording = true;
+                
+                showStatus('🎙️ Recording... Click stop when finished', 'info');
+                recordBtn.disabled = true;
+                recordBtn.classList.add('recording');
+                stopBtn.disabled = false;
+                sendAudioBtn.disabled = true;
+            } catch (err) {
+                console.error("Error starting recording:", err);
+                showStatus(`Could not start recording: ${err.message}`, 'error');
+            }
+        };
+
+        stopBtn.onclick = () => {
+            if (mediaRecorder && isRecording) {
+                mediaRecorder.stop();
+                isRecording = false;
+                
+                showStatus('Recording stopped. Ready to send.', 'success');
+                recordBtn.disabled = false;
+                recordBtn.classList.remove('recording');
+                stopBtn.disabled = true;
+                sendAudioBtn.disabled = false;
+
+                // Stop all media tracks to turn off the recording indicator
+                if (mediaRecorder.stream) {
+                    mediaRecorder.stream.getTracks().forEach(track => track.stop());
+                }
+            }
+        };
+
+        sendAudioBtn.onclick = async () => {
+            if (audioChunks.length === 0) {
+                showStatus('No audio recorded to send', 'error');
+                return;
+            }
+
+            const userId = getCurrentUserId();
+            if (!userId) return;
+
+            showStatus('Sending audio...', 'info');
+            sendAudioBtn.disabled = true;
+            responseCard.classList.remove('visible');
+
+            try {
+                const audioBlob = new Blob(audioChunks, { type: 'audio/webm;codecs=opus' });
+                const base64Audio = await blobToBase64(audioBlob);
+                
+                // FIX: Extract only the base64 part (after the comma)
+                const base64Data = base64Audio.split(',')[1]; // Get only the base64 content, not the array
+
+                const payload = {
+                    mime_type: "audio/webm",
+                    data: base64Data  // Now this is a string, not an array
+                };
+
+                const response = await fetch(`/send/${userId}`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+                displayResponse(result);
+
+            } catch (error) {
+                console.error('Error sending audio:', error);
+                showStatus(`Network error: ${error.message}`, 'error');
+            } finally {
+                sendAudioBtn.disabled = true;
+                audioChunks = []; // Clear chunks after sending
+            }
+        };
+
+        async function clearSession() {
+            const userId = getCurrentUserId();
+            if (!userId) return;
+
+            showStatus(`Clearing session for user ${userId}...`, 'info');
+
+            try {
+                const response = await fetch(`/sessions/${userId}`, {
+                    method: 'DELETE'
+                });
+                const result = await response.json();
+                if (result.success) {
+                    showStatus(result.message, 'success');
+                    responseCard.classList.remove('visible');
+                    responseText.textContent = '';
+                    responseMetadata.innerHTML = '';
+                } else {
+                    showStatus(result.error || 'Failed to clear session', 'error');
+                }
+            } catch (error) {
+                console.error('Error clearing session:', error);
+                showStatus(`Network error: ${error.message}`, 'error');
+            }
+        }
+    </script>
 </body>
 </html>
