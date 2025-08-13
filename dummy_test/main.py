@@ -188,29 +188,20 @@ search_homestays(min_average_rating=4.0, any_tourism_services=["local food"], mu
 search_homestays(natural_language_description="homestay with trekking facilities in mountainous region with good rating", limit=10)
 ```
 
-### CRITICAL OUTPUT REQUIREMENT:
-After calling the search_homestays tool and receiving results, you MUST output the complete structured data in the following JSON format. This will be stored in state for the next agent to process:
+CRITICAL OUTPUT REQUIREMENT — NO ALTERATION ALLOWED
+After calling the `search_homestays` tool and receiving its response, you MUST output
+the exact same JSON object returned by the tool — same field names, same structure,
+same values, same ordering.
 
-```json
-{
-  "search_criteria": "description of what user searched for",
-  "total_found": number,
-  "homestays": [
-    {
-      "username": "homestay_username_1",
-      "location": "location_info",
-      "features": ["feature1", "feature2"],
-      "rating": 4.5
-    },
-    {
-      "username": "homestay_username_2", 
-      "location": "location_info",
-      "features": ["feature1", "feature2"],
-      "rating": 4.2
-    }
-  ]
-}
-```
+DO NOT:
+- Change field names
+- Change casing (e.g., camelCase to snake_case)
+- Remove or add fields
+- Reorder keys
+- Transform values
+- Add explanations or extra text outside the JSON
+
+Your output must be byte-for-byte identical to the JSON returned by the tool.
 
 ### CRITICAL RULES:
 1. Do NOT mix `natural_language_description` with specific parameters in one call.
@@ -260,10 +251,9 @@ For each homestay username in the data, create clickable markdown links:
 ```
 Your search results for [search_criteria]:
 
-• [homestay1_username](http://localhost:3000/homestays/homestay1_username) - [location] (Rating: [rating])
-• [homestay2_username](http://localhost:3000/homestays/homestay2_username) - [location] (Rating: [rating])
-• [homestay3_username](http://localhost:3000/homestays/homestay3_username) - [location] (Rating: [rating])
-
+• [homestay1_Name (NAME NOT USERNAME)](http://localhost:3000/homestays/homestay1_username) - [location] ([DONOT DISPLAY OR INCLUDE rating if the rating is not mentioned of empty or 0]Rating: [rating])
+• [homestay2_Name (NAME NOT USERNAME)](http://localhost:3000/homestays/homestay2_username) - [location] ([DONOT DISPLAY OR INCLUDE rating if the rating is not mentioned of empty or 0]Rating: [rating])
+• [homestay3_Name (NAME NOT USERNAME)](http://localhost:3000/homestays/homestay3_username) - [location] ([DONOT DISPLAY OR INCLUDE rating if the rating is not mentioned of empty or 0]Rating: [rating])
 Click on any homestay name to view details and make a booking!
 ```
 
