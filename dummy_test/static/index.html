@@ -236,6 +236,22 @@
             margin-bottom: 16px;
         }
 
+        /* Style for clickable homestay links */
+        .response-text a {
+            color: var(--primary-color);
+            text-decoration: none;
+            font-weight: 500;
+            padding: 2px 6px;
+            border-radius: 4px;
+            background-color: rgba(66, 133, 244, 0.1);
+            transition: all 0.2s ease;
+        }
+
+        .response-text a:hover {
+            background-color: rgba(66, 133, 244, 0.2);
+            text-decoration: underline;
+        }
+
         .response-metadata {
             display: grid;
             gap: 12px;
@@ -419,9 +435,17 @@
             }
         }
 
+        // NEW: Function to convert markdown links to HTML
+        function convertMarkdownLinksToHtml(text) {
+            // Convert markdown links [text](url) to HTML links <a href="url">text</a>
+            return text.replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>');
+        }
+
         function displayResponse(response) {
             if (response.success && response.response_text) {
-                responseText.textContent = response.response_text;
+                // FIXED: Convert markdown links to HTML and use innerHTML instead of textContent
+                const htmlContent = convertMarkdownLinksToHtml(response.response_text);
+                responseText.innerHTML = htmlContent; // Changed from textContent to innerHTML
                 
                 // Display metadata
                 const metadata = [];
@@ -615,7 +639,7 @@
                 if (result.success) {
                     showStatus(result.message, 'success');
                     responseCard.classList.remove('visible');
-                    responseText.textContent = '';
+                    responseText.innerHTML = ''; // Changed from textContent to innerHTML
                     responseMetadata.innerHTML = '';
                 } else {
                     showStatus(result.error || 'Failed to clear session', 'error');
