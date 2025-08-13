@@ -1,3 +1,4 @@
+
 import os
 import logging
 from typing import Tuple, Optional, Dict, Any
@@ -15,7 +16,7 @@ from google.genai.types import (
 )
 from google.genai import types as genai_types
 from google.adk.runners import Runner
-from google.adk.agents import Agent
+from google.adk.agents import Agent,SequentialAgent
 from google.adk.tools import google_search
 from google.adk.sessions import InMemorySessionService
 from google.adk.tools.mcp_tool import MCPToolset, StreamableHTTPConnectionParams
@@ -28,6 +29,7 @@ from fastapi.exceptions import RequestValidationError
 import uvicorn
 from google.adk.agents.callback_context import CallbackContext
 from google.adk.models import LlmRequest, LlmResponse
+
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -58,6 +60,7 @@ class AgentResponse(BaseModel):
     grounding_metadata: Optional[Dict[str, Any]] = None
     usage_metadata: Optional[Dict[str, Any]] = None
     error: Optional[str] = None
+
 async def after_model_callback(
     callback_context: CallbackContext, llm_response: LlmResponse
 ) -> Optional[LlmResponse]:
@@ -70,9 +73,7 @@ async def after_model_callback(
     print(f"User input text: {user_input}")
 
     response_dump = llm_response.model_dump()
-
-    # Full raw response print (optional, comment out if verbose)
-    # print(f"LLM Response raw: {response_dump}")
+    print(f"LLM Response: response_dump={response_dump}")
 
     content = response_dump.get("content")
     if not content:
@@ -111,8 +112,9 @@ async def after_model_callback(
     print("##" * 22)
     return llm_response
 
-# Create root agent with enhanced configuration
-root_agent = Agent(
+
+### FIXED ### - Updated filter_agent instruction to store structured data in state
+filter_agent = Agent(
     model='gemini-2.5-flash',
     name='homestay_search_agent',
     description='A bilingual homestay search assistant for Nepal with voice message support.',
@@ -186,31 +188,112 @@ search_homestays(min_average_rating=4.0, any_tourism_services=["local food"], mu
 search_homestays(natural_language_description="homestay with trekking facilities in mountainous region with good rating", limit=10)
 ```
 
+### CRITICAL OUTPUT REQUIREMENT:
+After calling the search_homestays tool and receiving results, you MUST output the complete structured data in the following JSON format. This will be stored in state for the next agent to process:
+
+```json
+{
+  "search_criteria": "description of what user searched for",
+  "total_found": number,
+  "homestays": [
+    {
+      "username": "homestay_username_1",
+      "location": "location_info",
+      "features": ["feature1", "feature2"],
+      "rating": 4.5
+    },
+    {
+      "username": "homestay_username_2", 
+      "location": "location_info",
+      "features": ["feature1", "feature2"],
+      "rating": 4.2
+    }
+  ]
+}
+```
+
 ### CRITICAL RULES:
 1. Do NOT mix `natural_language_description` with specific parameters in one call.
 2. ALWAYS use English for location names in parameters (Nepali is fine inside natural language).
 3. PREFER `any_*` parameters for flexible matching; use strict lists only when the user says ALL are required.
 4. TRANSLATE Nepali terms to simple English keywords listed above.
-5. RESPOND in the user's original language (English/Nepali).
-
-### RESPONSE FORMAT:
-1. Summarize results in user's language
-2. List homestay usernames
-3. Mention search criteria used
-4. Suggest alternatives if few results
-
-Example Response (Nepali):
-"मैले ट्रेकिङ सुविधा भएका ५ वटा होमस्टे फेला पारे: homestay1, homestay2..."
-
-Example Response (English):
-"I found 5 homestays with trekking facilities: homestay1, homestay2..."''',
+5. ALWAYS output the structured JSON format after getting results from the tool.
+6. Extract as much detail as possible from the tool response to populate the JSON structure.''',
     tools=[MCPToolset(
         connection_params=StreamableHTTPConnectionParams(
             url="http://localhost:8080/homestay/mcp",
         )
     )],  
     after_model_callback=after_model_callback,
+    output_key="filtered_homestays",  # ### FIXED ### - This stores the agent's output in state
 )
+
+### FIXED ### - Updated refiner_agent instruction to properly format the structured data
+refiner_agent = Agent(
+    model='gemini-2.5-flash',
+    name='homestay_search_refiner',
+    description='Refines homestay search results and formats them with clickable links.',
+    instruction='''You are a homestay result refiner agent that formats filtered homestay results into user-friendly responses with embedded clickable links.
+
+## ACCESSING SHARED STATE:
+The filtered homestay results are available in the following format: {filtered_homestays}
+
+## YOUR MAIN TASKS:
+
+### 1. PARSE THE STRUCTURED DATA:
+The {filtered_homestays} contains JSON data with:
+- search_criteria: What the user was looking for
+- total_found: Number of homestays found
+- homestays: Array of homestay objects with username, location, features, rating
+
+### 2. CREATE A SHORT SUMMARY:
+Format a concise summary based on the data:
+- English: "I found [X] homestays with [features] in [location]:"
+- Nepali: "मैले [location]मा [features] भएका [X] वटा होमस्टे फेला पारे:"
+
+### 3. CREATE CLICKABLE EMBEDDED LINKS:
+For each homestay username in the data, create clickable markdown links:
+- URL Pattern: `http://localhost:3000/homestays/username`
+- Format: `[username](http://localhost:3000/homestays/username)`
+(YOU'LL GET THE USERNAME FROM THE STATE {filtered_homestays?} JSON)
+### 4. RESPONSE FORMAT:
+```
+Your search results for [search_criteria]:
+
+• [homestay1_username](http://localhost:3000/homestays/homestay1_username) - [location] (Rating: [rating])
+• [homestay2_username](http://localhost:3000/homestays/homestay2_username) - [location] (Rating: [rating])
+• [homestay3_username](http://localhost:3000/homestays/homestay3_username) - [location] (Rating: [rating])
+
+Click on any homestay name to view details and make a booking!
+```
+
+### 5. LANGUAGE MATCHING:
+- Respond in the same language as detected from the search criteria
+- Maintain language consistency in summary text
+- Always use English for URLs and usernames
+
+### 6. ERROR HANDLING:
+- If {filtered_homestays} is empty or malformed: "No homestay data available. Please try searching again."
+- If no homestays in data: "No homestays found matching your criteria. Please try different search terms."
+
+### 7. CRITICAL RULES:
+- ALWAYS parse the JSON structure from {filtered_homestays}
+- ALWAYS embed links inside homestay usernames (never show raw URLs)
+- Use bullet points for listing homestays
+- Include rating and location info when available
+- Ensure all links use the exact format: [username](http://localhost:3000/homestays/username)
+- Extract the homestay usernames from the structured data, not from simple text'''
+)
+    
+homestay_filter_pipeline = SequentialAgent(
+    sub_agents=[filter_agent, refiner_agent],
+    name="homestay_filter_pipeline", 
+    description="Pipeline to filter homestays based on user queries then after refining the results.",
+)
+
+root_agent = homestay_filter_pipeline
+
+# Rest of the code remains the same...
 class SessionManager:
     """Manages agent sessions with proper cleanup and error handling"""
     
@@ -256,33 +339,37 @@ class SessionManager:
 session_manager = SessionManager()
 
 async def process_agent_response(runner: Runner, content: Content, session_id: str, user_id: str) -> AgentResponse:
-    """Process agent response with comprehensive error handling and data extraction"""
     try:
         final_response_text = None
         final_event = None
-        all_events = []
-        
-        # Run the agent and collect events
-        async for events in runner.run_async(user_id=user_id, session_id=session_id, new_message=content):
-            if events.is_final_response():
-                final_event = events
-                
-                # Extract response text
-                if events.content and events.content.parts:
-                    final_response_text = events.content.parts[0].text
-                elif events.actions and events.actions.escalate:
-                    final_response_text = f"Agent escalated: {events.error_message or 'No specific message.'}"
-                break
-        
-        # Handle case where no final event was received
+
+        # Run the agent and collect events from the full stream (do NOT break early)
+        async for event in runner.run_async(user_id=user_id, session_id=session_id, new_message=content):
+            # debug log every event type (helps to see sub-agent boundaries)
+            logger.debug(f"Received event: final={event.is_final_response()}, author={getattr(event, 'author', None)}, actions={getattr(event, 'actions', None)}")
+
+            # If any event is a final response, remember it (do NOT break)
+            if event.is_final_response():
+                final_event = event
+                # prefer text from content.parts if present
+                if getattr(event, "content", None) and getattr(event.content, "parts", None):
+                    # choose last part text for safety
+                    try:
+                        final_response_text = event.content.parts[-1].text
+                    except Exception:
+                        final_response_text = getattr(event.content.parts[0], "text", None)
+                elif getattr(event, "actions", None) and getattr(event.actions, "escalate", False):
+                    final_response_text = f"Agent escalated: {event.error_message or 'No specific message.'}"
+                else:
+                    # keep final_event but allow next final responses to overwrite (so we get the last)
+                    final_response_text = final_response_text or None
+
+        # after the async for finishes, we will have the last final_event (if any)
         if not final_event:
             logger.warning(f"No final event received for user {user_id}")
-            return AgentResponse(
-                success=False,
-                error="No response received from agent"
-            )
-        
-        # Extract additional metadata
+            return AgentResponse(success=False, error="No response received from agent")
+
+        # gather grounding/usage metadata if available (same as before)
         grounding_metadata = None
         if hasattr(final_event, 'groundingMetadata') and final_event.groundingMetadata:
             grounding_metadata = {
@@ -290,13 +377,11 @@ async def process_agent_response(runner: Runner, content: Content, session_id: s
                 'grounding_supports': len(final_event.groundingMetadata.groundingSupports) if final_event.groundingMetadata.groundingSupports else 0,
                 'search_entry_point': bool(final_event.groundingMetadata.searchEntryPoint) if final_event.groundingMetadata.searchEntryPoint else False
             }
-        
+
         usage_metadata = None
         if hasattr(final_event, 'usageMetadata') and final_event.usageMetadata:
-            usage_metadata = {
-                'timestamp': getattr(final_event, 'timestamp', None)
-            }
-        
+            usage_metadata = {'timestamp': getattr(final_event, 'timestamp', None)}
+
         return AgentResponse(
             success=True,
             response_text=final_response_text,
@@ -304,14 +389,12 @@ async def process_agent_response(runner: Runner, content: Content, session_id: s
             grounding_metadata=grounding_metadata,
             usage_metadata=usage_metadata
         )
-        
-    except Exception as e:
-        logger.error(f"Error processing agent response: {e}")
-        return AgentResponse(
-            success=False,
-            error=f"Failed to process agent response: {str(e)}"
-        )
 
+    except Exception as e:
+        logger.error(f"Error processing agent response: {e}", exc_info=True)
+        return AgentResponse(success=False, error=f"Failed to process agent response: {str(e)}")
+
+# Rest of the FastAPI code remains exactly the same...
 def validate_message_data(mime_type: str, data: str) -> Tuple[bool, str]:
     """Validate message data based on MIME type"""
     if mime_type in SUPPORTED_TEXT_TYPES:
