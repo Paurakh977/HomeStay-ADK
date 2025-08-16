@@ -51,6 +51,8 @@ SUPPORTED_TEXT_TYPES = ["text/plain"]
 class MessageRequest(BaseModel):
     mime_type: str = Field(..., description="MIME type of the message")
     data: str = Field(..., description="Message data (text or base64 encoded)")
+    auth_token: Optional[str] = Field(None, description="Authentication token for the user")
+    admin_username: Optional[str] = Field(None, description="Admin username for officer management")
 
 class AgentResponse(BaseModel):
     success: bool
@@ -296,6 +298,12 @@ officer_manager_agent = Agent(
     ],
     instruction='''You are a specialized officer management agent that handles all administrative operations for officers under an admin account.
 
+## AUTHENTICATION ACCESS:
+You have access to authentication credentials from the session state:
+- {auth_token?}: The admin's authentication token
+- {admin_username?}: The admin's username
+
+ALWAYS use these values when making MCP tool calls. All tools require both parameters.
 ## AVAILABLE MCP TOOLS:
 
 ### 1. create_officer
@@ -448,7 +456,8 @@ class SessionManager:
     def __init__(self):
         self.active_sessions: Dict[str, Tuple[InMemorySessionService, Runner]] = {}
     
-    async def get_or_create_session(self, user_id: str) -> Tuple[InMemorySessionService, Runner]:
+    async def get_or_create_session(self, user_id: str, auth_token: Optional[str], admin_username: Optional[str] ) -> Tuple[InMemorySessionService, Runner]:
+
         """Get existing session or create a new one"""
         if user_id in self.active_sessions:
             return self.active_sessions[user_id]
@@ -458,7 +467,12 @@ class SessionManager:
             session = await session_service.create_session(
                 app_name=APP_NAME,
                 user_id=user_id,
-                session_id=user_id  
+                session_id=user_id,
+                state={
+                    "auth_token": auth_token,
+                    "admin_username": admin_username
+                } if auth_token and admin_username else {} # Store auth_token in session state for officer operations
+
             )
             runner = Runner(
                 app_name=APP_NAME,
@@ -623,6 +637,13 @@ async def send_message_endpoint(user_id: int, request: Request):
         body = await request.json()
         message_request = MessageRequest(**body)
         
+        #check if auth_token present or not and the admin_username is present or not
+        if not message_request.auth_token or not message_request.admin_username:
+            logger.warning(f"Missing auth_token or admin_username for user {user_id}")
+            message_request.auth_token = None
+            message_request.admin_username = None
+
+
         # Validate message data
         is_valid, error_msg = validate_message_data(message_request.mime_type, message_request.data)
         if not is_valid:
@@ -648,7 +669,7 @@ async def send_message_endpoint(user_id: int, request: Request):
                 )
         
         # Get or create session
-        session, runner = await session_manager.get_or_create_session(user_id_str)
+        session, runner = await session_manager.get_or_create_session(user_id_str,message_request.auth_token,message_request.admin_username)
         
         # Process the message through the agent
         response = await process_agent_response(runner, content, session.id, user_id_str)
